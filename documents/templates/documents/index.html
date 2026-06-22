@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocFlow — Система ЭЦП</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --primary-color: #4361ee;
+            --bg-color: #f0f2f5;
+        }
+        body {
+            background-color: var(--bg-color);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            color: #2b2d42;
+        }
+
+        /* Навигация и триггер профиля */
+        .navbar { background: white; border-bottom: 1px solid #e0e0e0; padding: 0.8rem 0; }
+        .profile-trigger {
+            cursor: pointer;
+            padding: 4px 12px;
+            border-radius: 12px;
+            transition: all 0.2s;
+        }
+        .profile-trigger:hover { background-color: #f8f9fa; }
+
+        /* Карточки статистики */
+        .main-card {
+            border: none;
+            border-radius: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+            background: white;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .stat-card {
+            min-height: 140px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 1.5rem !important;
+        }
+        .stat-card:hover { transform: translateY(-5px); box-shadow: 0 12px 24px rgba(0,0,0,0.08); }
+
+        .btn-primary { background-color: var(--primary-color); border: none; padding: 0.7rem 1.5rem; border-radius: 12px; font-weight: 600; transition: 0.2s; }
+        .btn-primary:hover { background-color: #3751d4; transform: translateY(-2px); }
+
+        /* Таблица и эффекты размытия */
+        .table-container {
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+            transition: all 0.4s ease;
+        }
+        .table thead th {
+            background-color: #f8f9fa;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 1px;
+            color: #6c757d;
+            padding: 1.2rem;
+            border: none;
+        }
+        .document-row { transition: all 0.3s ease; border-left: 4px solid transparent; }
+        .document-row:nth-child(even) { background-color: #fafbfc; }
+
+        /* Drag-and-Drop */
+        .table-blur .document-row:not(.drop-zone-active) { opacity: 0.4; filter: blur(1.5px); transform: scale(0.98); }
+        .drop-zone-active {
+            background-color: rgba(67, 97, 238, 0.08) !important;
+            border-left: 4px solid var(--primary-color) !important;
+            transform: scale(1.02);
+            z-index: 5;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important;
+        }
+
+        /* Оформление истории в профиле */
+        .activity-item {
+            border-left: 2px solid #e0e0e0;
+            padding-left: 15px;
+            position: relative;
+            margin-bottom: 20px;
+        }
+        .activity-item::before {
+            content: '';
+            position: absolute;
+            left: -6px;
+            top: 0;
+            width: 10px;
+            height: 10px;
+            background: var(--primary-color);
+            border-radius: 50%;
+        }
+
+        .toast-container { z-index: 1060; }
+    </style>
+</head>
+<body>
+
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasProfile" aria-labelledby="offcanvasProfileLabel" style="border-radius: 25px 0 0 25px;">
+        <div class="offcanvas-header border-bottom">
+            <h5 class="offcanvas-title fw-bold" id="offcanvasProfileLabel">Личный кабинет</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body d-flex flex-column">
+            <div class="text-center mb-4">
+                <div class="bg-primary bg-opacity-10 d-inline-block p-4 rounded-circle mb-3">
+                    <i class="bi bi-person-circle text-primary display-4"></i>
+                </div>
+                <h4 class="fw-bold mb-0 text-dark">{{ user.username }}</h4>
+                <p class="text-muted small">ID Пользователя: #{{ user.id|add:"1000" }}</p>
+            </div>
+
+            <hr>
+
+            <div class="mb-4">
+                <h6 class="text-muted fw-bold small text-uppercase mb-3">Ваша безопасность</h6>
+                <div class="p-3 bg-light rounded-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="small">Статус ЭЦП:</span>
+                        {% if user.userprofile.public_key %}
+                            <span class="badge bg-success">Активен</span>
+                        {% else %}
+                            <span class="badge bg-danger">Не найден</span>
+                        {% endif %}
+                    </div>
+                    <div class="small text-muted">Алгоритм: RSA-2048</div>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <h6 class="text-muted fw-bold small text-uppercase mb-3 text-primary">История активности</h6>
+                {% for log in user_logs %}
+                <div class="activity-item">
+                    <div class="fw-bold small">{{ log.action }}</div>
+                    <div class="text-muted" style="font-size: 0.75rem;">
+                        {{ log.details }} <br>
+                        <span class="opacity-75">{{ log.created_at|date:"H:i, d M" }}</span>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="text-center py-3">
+                    <i class="bi bi-clock-history text-muted opacity-50 fs-2 d-block mb-2"></i>
+                    <p class="text-muted small">Действий пока нет</p>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="mt-auto pt-4 border-top">
+                <form action="{% url 'logout' %}" method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-danger w-100 rounded-pill fw-bold">
+                        <i class="bi bi-box-arrow-right me-2"></i>Выйти из системы
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container position-fixed top-0 end-0 p-3">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="toast show align-items-center text-white border-0 shadow-lg" style="background-color: var(--primary-color);" role="alert">
+                    <div class="d-flex">
+                        <div class="toast-body"><i class="bi bi-info-circle-fill me-2"></i> {{ message }}</div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                    </div>
+                </div>
+            {% endfor %}
+        {% endif %}
+    </div>
+
+    <nav class="navbar sticky-top mb-4 shadow-sm">
+        <div class="container">
+            <a class="navbar-brand fw-bold text-primary fs-4" href="/">
+                <i class="bi bi-shield-check-fill me-2"></i>DocFlow <span class="text-dark">СЭД</span>
+            </a>
+            <div class="d-flex align-items-center">
+                {% if user.is_authenticated %}
+                    <div class="profile-trigger d-flex align-items-center" data-bs-toggle="offcanvas" data-bs-target="#offcanvasProfile">
+                        <div class="me-3 text-end d-none d-md-block">
+                            <small class="text-muted d-block small" style="font-size: 0.65rem;">Профиль</small>
+                            <span class="fw-bold text-dark">{{ user.username }}</span>
+                        </div>
+                        <div class="bg-primary text-white d-flex align-items-center justify-content-center rounded-circle shadow-sm" style="width: 42px; height: 42px;">
+                            <i class="bi bi-person-fill"></i>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <div class="container pb-5">
+        {% if user.is_authenticated %}
+
+            <div class="row g-4 mb-5">
+                <div class="col-md-4">
+                    <div class="card main-card stat-card border-start border-primary border-5">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="text-muted fw-bold mb-2 text-uppercase">Документы</h6>
+                                <h2 class="fw-bold mb-0">{{ docs|length }}</h2>
+                                <small class="text-primary">Файлов в архиве</small>
+                            </div>
+                            <div class="bg-primary bg-opacity-10 p-3 rounded-circle">
+                                <i class="bi bi-files text-primary fs-3"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card main-card stat-card border-start border-success border-5">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="text-muted fw-bold mb-2 text-uppercase">Безопасность</h6>
+                                <h2 class="fw-bold mb-0 text-success">RSA-2048</h2>
+                                <small class="text-muted">{% if user.userprofile.public_key %}Ключ активен{% else %}Ключ не найден{% endif %}</small>
+                            </div>
+                            <div class="bg-success bg-opacity-10 p-3 rounded-circle">
+                                <i class="bi bi-shield-lock text-success fs-3"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card main-card stat-card border-start border-info border-5">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="text-muted fw-bold mb-2 text-uppercase">Статус СЭД</h6>
+                                <h2 class="fw-bold mb-0 text-info">Online</h2>
+                                <small class="text-muted">Все сервисы активны</small>
+                            </div>
+                            <div class="bg-info bg-opacity-10 p-3 rounded-circle">
+                                <i class="bi bi-cpu text-info fs-3"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row align-items-end mb-4">
+                <div class="col-md-6">
+                    <h2 class="fw-bold mb-1">Рабочий стол</h2>
+                    <p class="text-muted mb-0">Перетащите <code>.pem</code> ключ на строку для подписи</p>
+                </div>
+                <div class="col-md-6 text-md-end mt-3 mt-md-0">
+                    <a href="{% url 'generate_keys' %}" class="btn btn-dark shadow rounded-pill me-2">
+                        <i class="bi bi-key-fill me-2"></i>Выпустить ЭЦП
+                    </a>
+                    <a href="/admin/documents/document/add/" class="btn btn-primary shadow rounded-pill">
+                        <i class="bi bi-plus-lg me-1"></i> Загрузить файл
+                    </a>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <div class="input-group shadow-sm bg-white rounded-pill overflow-hidden" style="max-width: 450px; border: 1px solid #e0e0e0;">
+                    <span class="input-group-text bg-white border-0 ps-4">
+                        <i class="bi bi-search text-primary"></i>
+                    </span>
+                    <input type="text" id="docSearch" class="form-control border-0 py-3" placeholder="Поиск по названию...">
+                </div>
+            </div>
+
+            <div class="table-container">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" id="mainTable">
+                        <thead>
+                            <tr>
+                                <th class="ps-4">Наименование</th>
+                                <th>Дата</th>
+                                <th class="text-center">Статус</th>
+                                <th class="text-end pe-4">Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            {% for d in docs %}
+                            <tr class="document-row" data-doc-id="{{ d.id }}">
+                                <td class="ps-4 py-3">
+                                    <div class="d-flex align-items-center">
+                                        <div class="bg-primary bg-opacity-10 p-2 rounded me-3">
+                                            <i class="bi bi-file-earmark-lock2 text-primary fs-4"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold text-dark doc-title">{{ d.title }}</div>
+                                            <small class="text-muted text-uppercase" style="font-size: 0.65rem;">ID: {{ d.id }} | PROTECTED</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td><span class="text-muted small">{{ d.created_at|date:"d.m.Y" }}</span></td>
+                                <td class="text-center">
+                                    {% if d.status == 'signed' %}
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle py-2 px-3 rounded-pill">
+                                            <i class="bi bi-patch-check-fill me-1"></i> Подписан
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-light text-secondary border py-2 px-3 rounded-pill">
+                                            Ожидает
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end pe-4">
+                                    <div class="btn-group shadow-sm rounded-pill overflow-hidden">
+                                        {% if d.status != 'signed' %}
+                                            <form action="{% url 'sign_document' d.id %}" method="POST" enctype="multipart/form-data" class="d-inline sign-form">
+                                                {% csrf_token %}
+                                                <input type="file" name="key_file" class="key-input" style="display:none;" onchange="this.form.submit()">
+                                                <button type="button" class="btn btn-primary btn-sm px-3" onclick="this.previousElementSibling.click()">Подписать</button>
+                                            </form>
+                                        {% else %}
+                                            <a href="{% url 'verify_document' d.id %}" class="btn btn-info btn-sm px-3 text-white fw-bold">Проверить</a>
+                                        {% endif %}
+                                        <a href="{{ d.file.url }}" class="btn btn-light btn-sm px-3 border-start" target="_blank">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center py-5">
+                                    <i class="bi bi-folder2-open display-4 text-muted opacity-25 d-block mb-3"></i>
+                                    <p class="text-muted mb-0">Архив пуст</p>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot class="bg-light border-top">
+                            <tr>
+                                <td colspan="4" class="py-3 ps-4 text-muted small">
+                                    <i class="bi bi-info-circle me-1"></i> Хэширование файлов: <strong>SHA-256</strong>. Шифрование подписи: <strong>RSA-2048</strong>.
+                                </td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+
+        {% else %}
+            <div class="row justify-content-center mt-5">
+                <div class="col-md-5">
+                    <div class="card main-card p-5 text-center">
+                        <div class="mb-4">
+                            <i class="bi bi-shield-lock-fill text-primary opacity-50" style="font-size: 4rem;"></i>
+                        </div>
+                        <h3 class="fw-bold text-dark">DocFlow СЭД</h3>
+                        <p class="text-muted mb-4">Авторизуйтесь для управления документами организации.</p>
+                        <a href="{% url 'login' %}" class="btn btn-primary btn-lg rounded-pill shadow w-100">Войти в систему</a>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // ЖИВОЙ ПОИСК
+        document.getElementById('docSearch')?.addEventListener('keyup', function() {
+            let filter = this.value.toLowerCase();
+            document.querySelectorAll('.document-row').forEach(row => {
+                let title = row.querySelector('.doc-title').textContent.toLowerCase();
+                row.style.display = title.includes(filter) ? "" : "none";
+            });
+        });
+
+        // DRAG AND DROP С ЭФФЕКТОМ BLUR
+        const tableBody = document.getElementById('tableBody');
+        const rows = document.querySelectorAll('.document-row');
+
+        rows.forEach(row => {
+            const form = row.querySelector('.sign-form');
+            const fileInput = row.querySelector('.key-input');
+
+            if (form) {
+                row.addEventListener('dragenter', (e) => {
+                    e.preventDefault();
+                    tableBody.classList.add('table-blur');
+                    row.classList.add('drop-zone-active');
+                });
+
+                row.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                });
+
+                row.addEventListener('dragleave', (e) => {
+                    if (!row.contains(e.relatedTarget)) {
+                        row.classList.remove('drop-zone-active');
+                        const anyActive = [...rows].some(r => r.classList.contains('drop-zone-active'));
+                        if (!anyActive) tableBody.classList.remove('table-blur');
+                    }
+                });
+
+                row.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    tableBody.classList.remove('table-blur');
+                    row.classList.remove('drop-zone-active');
+
+                    if (e.dataTransfer.files.length > 0) {
+                        fileInput.files = e.dataTransfer.files;
+                        form.submit();
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>

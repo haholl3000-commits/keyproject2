@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Протокол проверки ЭЦП — DocFlow</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        body { background-color: #f0f2f5; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .verification-card {
+            max-width: 800px;
+            margin: 50px auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+            overflow: hidden;
+            border: none;
+        }
+        .status-header { padding: 40px; text-align: center; }
+        .status-success { background: #e8f5e9; color: #2e7d32; }
+        .status-error { background: #ffebee; color: #c62828; }
+
+        .stamp-container {
+            border: 3px solid #0052cc;
+            border-radius: 10px;
+            padding: 15px;
+            display: inline-block;
+            margin-top: 20px;
+            text-align: left;
+            position: relative;
+            background: rgba(0, 82, 204, 0.05);
+            transform: rotate(-2deg);
+        }
+        .stamp-header {
+            color: #0052cc;
+            font-weight: 900;
+            font-size: 0.8rem;
+            border-bottom: 2px solid #0052cc;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+        }
+        .stamp-body { color: #0052cc; font-size: 0.85rem; line-height: 1.4; }
+        .hash-text { font-family: monospace; font-size: 0.75rem; word-break: break-all; color: #666; }
+
+        @media print {
+            body { background-color: white !important; padding: 0 !important; }
+            .verification-card {
+                margin: 0 auto !important;
+                box-shadow: none !important;
+                border: 1px solid #eee !important;
+                max-width: 100% !important;
+            }
+            .no-print { display: none !important; }
+            .status-header { -webkit-print-color-adjust: exact; }
+        }
+    </style>
+</head>
+<body class="py-5">
+    <div class="container">
+        <div class="verification-card">
+
+            {% if status == 'success' %}
+                <div class="status-header status-success">
+                    <i class="bi bi-patch-check-fill display-1"></i>
+                    <h1 class="fw-bold mt-3">Подпись подтверждена</h1>
+                    <p class="lead">Электронный документ признан подлинным</p>
+                </div>
+
+                <div class="p-5">
+                    <h5 class="fw-bold mb-4">Детали проверки:</h5>
+                    <div class="row mb-3">
+                        <div class="col-sm-4 text-muted">Документ:</div>
+                        <div class="col-sm-8 fw-bold">{{ doc.title }}</div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-sm-4 text-muted">Владелец ЭЦП:</div>
+                        <div class="col-sm-8 fw-bold">{{ doc.owner.get_full_name|default:doc.owner.username }}</div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-sm-4 text-muted">Дата подписания:</div>
+                        <div class="col-sm-8 fw-bold">{{ doc.created_at|date:"d.m.Y H:i" }}</div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-sm-4 text-muted">Хэш-сумма (SHA-256):</div>
+                        <div class="col-sm-8 hash-text">{{ doc.file_hash }}</div>
+                    </div>
+
+                    <div class="text-center mt-5">
+                        <div class="stamp-container">
+                            <div class="stamp-header">
+                                <i class="bi bi-shield-check me-2"></i> ДОКУМЕНТ ПОДПИСАН ЭЦП
+                            </div>
+                            <div class="stamp-body">
+                                <div>Владелец: {{ doc.owner.username|upper }}</div>
+                                <div>ID Сертификата: RSA-2048-{{ doc.id }}</div>
+                                <div>Дата: {{ doc.created_at|date:"d.m.Y" }}</div>
+                                <div class="mt-1 small" style="font-size: 0.6rem;">DOCFLOW SECURE SYSTEM</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            {% else %}
+                <div class="status-header status-error">
+                    <i class="bi bi-exclamation-octagon-fill display-1"></i>
+                    <h1 class="fw-bold mt-3">Ошибка проверки</h1>
+                    <p class="lead">Целостность документа нарушена или ключ не совпадает</p>
+                </div>
+                <div class="p-5 text-center">
+                    <div class="alert alert-warning border-0 small mb-4 no-print text-start">
+                        <i class="bi bi-lightbulb-fill me-2"></i><strong>Памятка для защиты:</strong><br>
+                        1. Используйте <u>самый последний</u> выпущенный файл <strong>.pem</strong>.<br>
+                        2. Если файл документа был открыт и пересохранен — хэш изменится.<br>
+                        3. Рекомендуется: удалить документ и загрузить его заново для чистого теста.
+                    </div>
+
+                    <div class="alert alert-danger border-0 py-4">
+                        <i class="bi bi-shield-slash fs-1 d-block mb-3"></i>
+                        Данный файл был изменен после наложения подписи или вы пытаетесь проверить его неверным публичным ключом.
+                        <strong>Документ не имеет юридической силы.</strong>
+                    </div>
+                </div>
+            {% endif %}
+
+            <div class="bg-light p-4 text-center border-top no-print">
+                <a href="{% url 'dashboard' %}" class="btn btn-primary px-5 rounded-pill shadow me-2">
+                    <i class="bi bi-arrow-left me-2"></i>Вернуться
+                </a>
+                <button onclick="window.print()" class="btn btn-dark px-5 rounded-pill shadow">
+                    <i class="bi bi-printer me-2"></i> Распечатать протокол
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
