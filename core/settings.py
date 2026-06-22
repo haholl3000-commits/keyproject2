@@ -130,3 +130,5 @@ LOGOUT_REDIRECT_URL = 'dashboard'
 
 # Куда отправлять пользователя, если он не авторизован (для @login_required)
 LOGIN_URL = 'login'
+
+CSRF_TRUSTED_ORIGINS = ['https://keyproject2-production.up.railway.app']
